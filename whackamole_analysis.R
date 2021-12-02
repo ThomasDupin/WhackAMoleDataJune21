@@ -370,7 +370,7 @@ fig
 ################
 # try using the saccade package to find some fixation
 #
-#This work for only one session 
+#This work for only one session of one participant
 ###############
 
 
@@ -412,6 +412,7 @@ ggplot(fixations, aes(x, y)) +
 
 ###########
 # Fixation duration over time 
+# This is the duration of a fixation over the time during one session, its not really accurate.
 ##########
 
 fixations %>%
@@ -419,7 +420,8 @@ fixations %>%
   
 
 ############
-#This works for one participant at the time
+#This works for one participant at the time, its the same thing than above but
+# the data is from all the session of one participant
 ############
 GazeDataParticipant= D%>%
   select(Participant,contains("WorldGazeHitPosition"),Timestamp)%>%
@@ -441,7 +443,7 @@ ggplot(fixationsParticipant, aes(x, y)) +
 
 
 ############
-#This works summarise everything
+#This summarise everything, the data of the participant number 3 is not accurate at all so i ignore the data
 ############
 GazeData= D%>%
   select(Participant,contains("WorldGazeHitPosition"),Timestamp)%>%
@@ -476,8 +478,8 @@ ggplot(fixations, aes(x, y)) +
 # D) Investigate how to calculate “saccade peak velocity”.
 #############
 #####
-# For the saccade peak velocity when can re use the datatable fixations from the the question B. There is a peak vx and vy
-  
+# For the saccade peak velocity when can re use the datatable fixations from before.There is a peak vx and vy
+# Here i choose to get a brand new dataframe 
 GameStartTimestamp = D %>%
   select(SessionID, Timestamp,Event) %>%
   filter(Event =="Game Started",SessionID=="55aa012d4ac2315806e052fa911c9343" ) 
@@ -503,7 +505,12 @@ GazeStat = fixationSessionRange %>%
 
 DataFixations <- subset(detect.fixations(GazeStat), event=="fixation") 
 
-diagnostic.plot(GazeStat, DataFixations)
+
+ggplot(DataFixations, aes(x, y)) +
+  geom_point(size=0.7) +
+  coord_fixed() +
+  facet_wrap(~trial)
+
 
 #########
 # Some Stats with peak velocity on X and on Y
@@ -512,8 +519,95 @@ statsVelocity <- calculate.summary(DataFixations)
 round(statsVelocity, digits=2)
 
 
-peakVelocity <- c(DataFixations$peak.vx,DataFixations$peak.vy)
-length(peakVelocity)
+Velocity= DataFixations %>%
+  summarise(peakVx = DataFixations$peak.vx,
+         peakVy = DataFixations$peak.vy)
 
+
+
+peakVelocity = Velocity %>%
+  rowwise() %>%
+  mutate(peakVelocity = sqrt(sum(peakVx^2 + peakVy^2)))
+
+
+
+###########
+# Bring all the session together to check the fixations 
+###########
+
+
+Participant1= D%>%
+  select(Participant,contains("WorldGazeHitPosition"),Timestamp)%>%
+  filter(WorldGazeHitPositionX!="NA")%>%
+  filter(Participant=="6")%>%
+  summarise(time = Timestamp,
+            x= as.numeric(WorldGazeHitPositionX),
+            y= as.numeric(WorldGazeHitPositionY),
+            trial= Participant)
+
+fixationsParticipant1 <- subset(detect.fixations(Participant1), event=="fixation")
+
+fixationsParticipant1 %>%
+  plot_ly(x = ~start, y = ~dur, type = 'scatter', mode = 'lines') 
+
+
+############
+# Plot to see eye movement based on the duration
+############
+
+library(plotly)
+install.packages("quantmod")
+library(quantmod)
+
+getSymbols("AAPL",src='yahoo')
+
+
+
+GameStartTimestamp = D %>%
+  select(SessionID, Timestamp,Event) %>%
+  filter(Event =="Game Started",SessionID=="55aa012d4ac2315806e052fa911c9343" ) 
+
+
+
+fixationSession = D %>%
+  select(Participant,contains("WorldGazeHitPosition"), SessionID, Event, Timestamp) %>%
+  filter(SessionID=="55aa012d4ac2315806e052fa911c9343")
+
+
+fixationSessionRange <- fixationSession[fixationSession$Timestamp > '2021-06-28 13:50:30.06' & fixationSession$Timestamp < '2021-06-28 13:52:31.9802', ]
+
+GazeStat = D %>%
+  select(Participant,contains("WorldGazeHitPosition"), SessionID, Event, Timestamp) %>%
+  filter(SessionID=="55aa012d4ac2315806e052fa911c9343")%>%
+  summarise(x= as.numeric(WorldGazeHitPositionX),
+            y= as.numeric(WorldGazeHitPositionY),
+            trial= SessionID,
+            time = Timestamp
+  ) %>%
+  filter(x!="NA",y!="NA")
+
+
+
+DataFixations <- subset(detect.fixations(GazeStat), event=="fixation") 
+
+
+
+fig <- plot_ly() %>% add_trace(data = DataFixations, x=~x, y=~y, frame=~start)
+
+
+fig
+
+
+col_count = df_vis %>% filter(!is.na(WallColumnCount)) %>% select(WallColumnCount)
+row_count = df_vis %>% filter(!is.na(WallRowCount)) %>% select(WallRowCount)
+Wall_moles <- expand.grid(1:tail(col_count, n=1)[,1], 1:tail(row_count, n=1)[,1]) %>%
+  dplyr::rename(x = Var1, y = Var2)
+
+fig <- vistemplate %>%
+  add_trace(name="Spawn Points", data=Wall_moles,
+            x=~x, y=~y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none')
+
+  
+plot_ly() %>% add_trace(data = GazeStat, x=~x, y=~y, frame=~time)
 
 
