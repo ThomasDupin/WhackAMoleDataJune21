@@ -1,19 +1,21 @@
 library(plotly)
 library(tidyverse)
-library("devtools")
 install_github("tmalsburg/saccades/saccades", dependencies=TRUE, force=TRUE)
 library(saccades)
 library(rgl)
 library(reshape2)
-library(tidyverse)
-library("devtools")
 install_github("tidymodels/tidymodels")
 library(tidymodels)
-
 library(plotly)
 library(kernlab)
 library(pracma) #For meshgrid()²
 library(lubridate)
+install.packages("quantmod")
+library(quantmod)
+install.packages("devtools")
+library(devtools) # Make sure that the devtools library is loaded
+install_github("firasfneish/CI-package")
+library(CI)
 options("digits.secs"=6)
 
 fig <- plot_ly() %>%
@@ -555,13 +557,100 @@ fixationsParticipant1 %>%
 # Plot to see eye movement based on the duration
 ############
 
-library(plotly)
-install.packages("quantmod")
-library(quantmod)
+
 
 getSymbols("AAPL",src='yahoo')
 
 
+##########
+# Plot the eye movement based on the fixation
+#########
+
+GazeStatFixation = fixationSessionRange %>%
+  summarise(x= as.numeric(WorldGazeHitPositionX),
+            y= as.numeric(WorldGazeHitPositionY),
+            trial= SessionID,
+            time = difftime( Timestamp, GameStartTimestamp$Timestamp)
+  ) %>%
+  filter(x!="NA",y!="NA")
+
+DataFixations <- subset(detect.fixations(GazeStatFixation)) 
+DataFixationsUpdated <- filter(DataFixations, dur>0.34353489 & dur<0.46293334)
+
+
+
+
+
+Lines <- DataFixations%>% ungroup() %>% group_by(dur) %>%
+  
+  summarize(perc_ci = qt(0.95 + (1 - 0.95)/2, df = length(dur) - 1) * sd(dur)/sqrt(length(dur)),
+            
+            frust_ci = qt(0.95 + (1 - 0.95)/2, df = length(dur) - 1) * sd(dur)/sqrt(length(dur)),
+            
+            perc_mean = mean(dur),
+            
+            frust_mean = mean(dur))
+
+
+hey <- CI_t(DataFixations$dur, ci = 0.95)
+
+
+plot(density(DataFixations$dur))
+
+ShapiroTest <- shapiro.test(DataFixations$dur)
+# w = 0.73673
+# p-value < 2.2e-16
+#0.000000000000000000000002 so not normally distributed
+#
+
+
+
+
+
+
+#########
+# This is for the coord of the background mole
+#########
+MoleWall <- D %>% 
+  select(WallRowCount,WallColumnCount) %>%
+  summarize(
+    x = WallColumnCount,
+    y = WallRowCount
+  )
+  
+MoleWallXY <- D %>% 
+  select(MolePositionWorldX,MolePositionWorldY) %>%
+  mutate(XY= paste(MolePositionWorldX,MolePositionWorldY))%>%
+  summarize(
+    X = MolePositionWorldX,
+    Y = MolePositionWorldY,
+    XY = XY
+  )
+
+
+MoleWallXY <- unique(MoleWallXY)
+
+
+
+
+########
+# Here is the plot for the fixation
+########
+
+
+fig <- plot_ly() %>% add_trace(data = DataFixationsUpdated, x=~x, y=~y, frame=~start)  %>%
+  add_trace(name="Spawn Points", data=MoleWallXY,
+            x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none')
+
+fig
+
+
+
+
+
+#############
+# plot the eye movement based on the gaze stat
+#############
 
 GameStartTimestamp = D %>%
   select(SessionID, Timestamp,Event) %>%
@@ -576,38 +665,63 @@ fixationSession = D %>%
 
 fixationSessionRange <- fixationSession[fixationSession$Timestamp > '2021-06-28 13:50:30.06' & fixationSession$Timestamp < '2021-06-28 13:52:31.9802', ]
 
-GazeStat = D %>%
-  select(Participant,contains("WorldGazeHitPosition"), SessionID, Event, Timestamp) %>%
-  filter(SessionID=="55aa012d4ac2315806e052fa911c9343")%>%
+
+#### Changing the data and parsing the timestamp to get only the first number
+
+GazeStat = fixationSessionRange %>%
+  mutate(time = as.character(difftime( Timestamp, GameStartTimestamp$Timestamp))) %>%
+  separate(col=time,sep="[.]",into=c("i1","i2"), remove=F) %>%
   summarise(x= as.numeric(WorldGazeHitPositionX),
             y= as.numeric(WorldGazeHitPositionY),
             trial= SessionID,
-            time = Timestamp
-  ) %>%
-  filter(x!="NA",y!="NA")
+            time = i1
+            ) %>%
+  filter(x!="NA",y!="NA") %>%
+  group_by(time)%>%
+  mutate(meanx = mean(x),
+         meany= mean(y)) %>%
+  slice(1:10)%>%
+  mutate(time = as.numeric(time))
+
+
+GazeStatArranged <- arrange(GazeStat, time)
+ 
+ 
+
+###
+# To see each mole who is actived with the time and the position
+###
+MoleActivated <- D%>%
+  select(contains("CurrentMoleToHitIndex"), Timestamp, SessionID, MolePositionWorldX,MolePositionWorldY )%>%
+  filter(SessionID =="55aa012d4ac2315806e052fa911c9343")%>%
+  mutate(time = as.character(difftime( Timestamp, GameStartTimestamp$Timestamp))) %>%
+  separate(col=time,sep="[.]",into=c("i1","i2"), remove=F)%>%
+  summarise(molex= CurrentMoleToHitIndexX,
+            moley= CurrentMoleToHitIndexY,
+            X= MolePositionWorldX,
+            Y=MolePositionWorldY,
+            time = i1
+            )%>%
+  filter(molex !="NA")%>%
+  mutate(time = as.numeric(time)) %>%
+  filter(time >=0)
+
+MoleActivated <- arrange(MoleActivated, time) 
 
 
 
-DataFixations <- subset(detect.fixations(GazeStat), event=="fixation") 
 
 
 
-fig <- plot_ly() %>% add_trace(data = DataFixations, x=~x, y=~y, frame=~start)
-
+fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = GazeStatArranged, x=~x, y=~y, frame=~time)%>%
+  add_trace(name="Spawn Points", data=MoleWallXY,
+            x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none') %>%
+  add_trace(name="Mean Gaze", data=GazeStatArranged,
+            x=~meanx, y=~meany, frame=~time, marker=list(size=32, color = 'rgb(17, 157, 255)',opacity = 0.1))
 
 fig
 
 
-col_count = df_vis %>% filter(!is.na(WallColumnCount)) %>% select(WallColumnCount)
-row_count = df_vis %>% filter(!is.na(WallRowCount)) %>% select(WallRowCount)
-Wall_moles <- expand.grid(1:tail(col_count, n=1)[,1], 1:tail(row_count, n=1)[,1]) %>%
-  dplyr::rename(x = Var1, y = Var2)
-
-fig <- vistemplate %>%
-  add_trace(name="Spawn Points", data=Wall_moles,
-            x=~x, y=~y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none')
-
-  
-plot_ly() %>% add_trace(data = GazeStat, x=~x, y=~y, frame=~time)
-
+#  add_trace(name="test", data=MoleActivated,
+#            x=~X, y=~Y, frame=~time,symbol=I('o'), marker=list(size=32, color = 'rgb(255, 0 , 0)',opacity = 0.5))
 
