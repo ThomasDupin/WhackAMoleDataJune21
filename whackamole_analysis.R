@@ -604,6 +604,22 @@ ShapiroTest <- shapiro.test(DataFixations$dur)
 #
 
 
+########
+# Here is the plot for the fixation
+########
+
+
+fig <- plot_ly() %>% add_trace(data = DataFixationsUpdated, x=~x, y=~y, frame=~start)  %>%
+  add_trace(name="Spawn Points", data=MoleWallXY,
+            x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none')
+
+fig
+
+
+
+########
+# GAZE PATH PLOT
+#######
 
 
 
@@ -633,23 +649,8 @@ MoleWallXY <- unique(MoleWallXY)
 
 
 
-########
-# Here is the plot for the fixation
-########
-
-
-fig <- plot_ly() %>% add_trace(data = DataFixationsUpdated, x=~x, y=~y, frame=~start)  %>%
-  add_trace(name="Spawn Points", data=MoleWallXY,
-            x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none')
-
-fig
-
-
-
-
-
 #############
-# plot the eye movement based on the gaze stat
+# To get one session
 #############
 
 GameStartTimestamp = D %>%
@@ -721,6 +722,10 @@ fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = GazeStatArranged, x=~x
 
 fig
 
+
+###
+# Trying to add the active mole
+####
 
 #  add_trace(name="test", data=MoleActivated,
 #            x=~X, y=~Y, frame=~time,symbol=I('o'), marker=list(size=32, color = 'rgb(255, 0 , 0)',opacity = 0.5))
