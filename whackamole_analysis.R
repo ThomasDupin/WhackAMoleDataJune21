@@ -638,8 +638,8 @@ MoleWallXY <- D %>%
   select(MolePositionWorldX,MolePositionWorldY) %>%
   mutate(XY= paste(MolePositionWorldX,MolePositionWorldY))%>%
   summarize(
-    X = MolePositionWorldX,
-    Y = MolePositionWorldY,
+    X = as.numeric(MolePositionWorldX),
+    Y = as.numeric(MolePositionWorldY),
     XY = XY
   )
 
@@ -678,14 +678,18 @@ GazeStat = fixationSessionRange %>%
             time = i1
             ) %>%
   filter(x!="NA",y!="NA") %>%
-  group_by(time)%>%
+  group_by(time)  
+
+
+
+GazeStatReduced <- GazeStat[which(1:nrow(GazeStat) %% 3 == 0) , ] %>%
+  slice(1:5)%>%
   mutate(meanx = mean(x),
          meany= mean(y)) %>%
-  slice(1:10)%>%
   mutate(time = as.numeric(time))
 
 
-GazeStatArranged <- arrange(GazeStat, time)
+GazeStatArranged <- arrange(GazeStatReduced, time)
  
  
 
@@ -697,29 +701,43 @@ MoleActivated <- D%>%
   filter(SessionID =="55aa012d4ac2315806e052fa911c9343")%>%
   mutate(time = as.character(difftime( Timestamp, GameStartTimestamp$Timestamp))) %>%
   separate(col=time,sep="[.]",into=c("i1","i2"), remove=F)%>%
-  summarise(molex= CurrentMoleToHitIndexX,
-            moley= CurrentMoleToHitIndexY,
-            X= MolePositionWorldX,
-            Y=MolePositionWorldY,
-            time = i1
+  summarise(xIndex= as.numeric(CurrentMoleToHitIndexX),
+            yIndex= as.numeric(CurrentMoleToHitIndexY),
+            XMole=as.numeric( MolePositionWorldX),
+            YMole=as.numeric(MolePositionWorldY),
+            time = i1,
+            opacity=1
             )%>%
-  filter(molex !="NA")%>%
   mutate(time = as.numeric(time)) %>%
   filter(time >=0)
 
-MoleActivated <- arrange(MoleActivated, time) 
+MoleActivated <- arrange(MoleActivated, time) %>%
+  group_by(time)
+
+
+MoleActivated <- unique(MoleActivated)
+MoleActivated[is.na(MoleActivated)] <- 0
 
 
 
+MoleActivated$opacity <- ifelse(MoleActivated$xIndex == 0, 0,1)
 
 
+merge <- merge(GazeStatArranged, MoleActivated, by="time")
 
-fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = GazeStatArranged, x=~x, y=~y, frame=~time)%>%
+
+tested <- bind_rows(MoleActivated, GazeStatArranged)
+
+fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = merge, x=~x, y=~y, frame=~time)%>%
   add_trace(name="Spawn Points", data=MoleWallXY,
             x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none') %>%
-  add_trace(name="Mean Gaze", data=GazeStatArranged,
-            x=~meanx, y=~meany, frame=~time, marker=list(size=32, color = 'rgb(17, 157, 255)',opacity = 0.1))
+  add_trace(name="Active Mole", data=merge,
+            x=~XMole, y=~YMole, type='scatter',frame=~time, marker=list(size=32, color = 'rgb(255, 0 , 0)'),opacity = merge$opacity) %>%
+  add_trace(name="Mean Gaze", data=merge,
+            x=~meanx, y=~meany, frame=~time, marker=list(size=32, color = 'rgb(17, 157, 255)'))
+ 
 
+ 
 fig
 
 
@@ -729,4 +747,16 @@ fig
 
 #  add_trace(name="test", data=MoleActivated,
 #            x=~X, y=~Y, frame=~time,symbol=I('o'), marker=list(size=32, color = 'rgb(255, 0 , 0)',opacity = 0.5))
+
+
+#add_trace(name="Active Mole", data=MoleActivated,
+#          x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32,color = 'rgb(255, 0 , 0)'),opacity=~test,hoverinfo='none')
+
+
+A <- c(1,2,3,4)
+cumsum(A)
+cumsum(A,1)
+
+
+
 
