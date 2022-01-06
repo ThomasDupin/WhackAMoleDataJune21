@@ -674,7 +674,7 @@ GazeStat = fixationSessionRange %>%
   separate(col=time,sep="[.]",into=c("i1","i2"), remove=F) %>%
   summarise(x= as.numeric(WorldGazeHitPositionX),
             y= as.numeric(WorldGazeHitPositionY),
-            trial= SessionID,
+            trial= as.numeric(SessionID),
             time = i1
             ) %>%
   filter(x!="NA",y!="NA") %>%
@@ -725,15 +725,20 @@ MoleActivated$opacity <- ifelse(MoleActivated$xIndex == 0, 0,1)
 
 merge <- merge(GazeStatArranged, MoleActivated, by="time")
 
+#tested <- unique(merge)
 
-tested <- bind_rows(MoleActivated, GazeStatArranged)
 
-fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = merge, x=~x, y=~y, frame=~time)%>%
+tested <- bind_rows(MoleActivated, GazeStatArranged) 
+tested <- arrange(tested, time) 
+tested$opacity[is.na(tested$opacity)] <- 0
+
+
+fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = tested, x=~x, y=~y, frame=~time)%>%
   add_trace(name="Spawn Points", data=MoleWallXY,
             x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none') %>%
-  add_trace(name="Active Mole", data=merge,
+  add_trace(name="Active Mole", data=tested,
             x=~XMole, y=~YMole, type='scatter',frame=~time, marker=list(size=32, color = 'rgb(255, 0 , 0)'),opacity = merge$opacity) %>%
-  add_trace(name="Mean Gaze", data=merge,
+  add_trace(name="Mean Gaze", data=tested,
             x=~meanx, y=~meany, frame=~time, marker=list(size=32, color = 'rgb(17, 157, 255)'))
  
 
