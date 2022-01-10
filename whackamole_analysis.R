@@ -734,19 +734,18 @@ GazeStatActiveMole$opacity[is.na(tested$opacity)] <- 0
 
 
 
+
 fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = GazeStatActiveMole, x=~x, y=~y, frame=~time)%>%
   add_trace(name="Spawn Points", data=MoleWallXY,
             x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none') %>%
   add_trace(name="Active Mole", data=GazeStatActiveMole,
-            x=~XMole, y=~YMole, type='scatter',frame=~time, marker=list(size=32, color = 'rgb(255, 0 , 0)'),opacity = merge$opacity) %>%
+            x=~XMole, y=~YMole, type='scatter',frame=~time, marker=list(size=32, color = 'rgb(255, 0 , 0)')) %>%
   add_trace(name="Mean Gaze", data=GazeStatActiveMole,
             x=~meanx, y=~meany, frame=~time, marker=list(size=32, color = 'rgb(17, 157, 255)'))
  
 
  
 fig
-
-
 
 
 
