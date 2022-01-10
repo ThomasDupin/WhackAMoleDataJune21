@@ -723,22 +723,23 @@ MoleActivated[is.na(MoleActivated)] <- 0
 MoleActivated$opacity <- ifelse(MoleActivated$xIndex == 0, 0,1)
 
 
-merge <- merge(GazeStatArranged, MoleActivated, by="time")
+
 
 #tested <- unique(merge)
 
 
-tested <- bind_rows(MoleActivated, GazeStatArranged) 
-tested <- arrange(tested, time) 
-tested$opacity[is.na(tested$opacity)] <- 0
+GazeStatActiveMole <- bind_rows(MoleActivated, GazeStatArranged) 
+GazeStatActiveMole <- arrange(tested, time) 
+GazeStatActiveMole$opacity[is.na(tested$opacity)] <- 0
 
 
-fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = tested, x=~x, y=~y, frame=~time)%>%
+
+fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = GazeStatActiveMole, x=~x, y=~y, frame=~time)%>%
   add_trace(name="Spawn Points", data=MoleWallXY,
             x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none') %>%
-  add_trace(name="Active Mole", data=tested,
+  add_trace(name="Active Mole", data=GazeStatActiveMole,
             x=~XMole, y=~YMole, type='scatter',frame=~time, marker=list(size=32, color = 'rgb(255, 0 , 0)'),opacity = merge$opacity) %>%
-  add_trace(name="Mean Gaze", data=tested,
+  add_trace(name="Mean Gaze", data=GazeStatActiveMole,
             x=~meanx, y=~meany, frame=~time, marker=list(size=32, color = 'rgb(17, 157, 255)'))
  
 
@@ -746,21 +747,22 @@ fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = tested, x=~x, y=~y, fr
 fig
 
 
-###
-# Trying to add the active mole
-####
-
-#  add_trace(name="test", data=MoleActivated,
-#            x=~X, y=~Y, frame=~time,symbol=I('o'), marker=list(size=32, color = 'rgb(255, 0 , 0)',opacity = 0.5))
 
 
-#add_trace(name="Active Mole", data=MoleActivated,
-#          x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32,color = 'rgb(255, 0 , 0)'),opacity=~test,hoverinfo='none')
+
+test <- MoleActivated %>%
+  filter(time <= 5)
 
 
-A <- c(1,2,3,4)
-cumsum(A)
-cumsum(A,1)
+
+fig <- plot_ly() %>% 
+  add_trace(name="Spawn Points", data=MoleWallXY,
+            x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none') %>%
+  add_trace(name="Active Mole", data=test,
+            x=~XMole, y=~YMole, type='scatter',frame=~time, marker=list(size=32, color = 'rgb(255, 0 , 0)'),opacity = test$opacity)
+
+
+fig
 
 
 
