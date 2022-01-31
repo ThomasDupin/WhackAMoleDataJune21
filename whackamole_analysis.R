@@ -4,6 +4,7 @@ install_github("tmalsburg/saccades/saccades", dependencies=TRUE, force=TRUE)
 library(saccades)
 library(rgl)
 library(reshape2)
+library(tibble)
 install_github("tidymodels/tidymodels")
 library(tidymodels)
 library(plotly)
@@ -670,6 +671,23 @@ fixationSession = D %>%
 fixationSessionRange <- fixationSession[fixationSession$Timestamp > '2021-06-28 13:50:30.06' & fixationSession$Timestamp < '2021-06-28 13:52:31.9802', ]
 
 
+
+#######
+# Datafram with all the mole 
+######
+
+MoleData <- D%>%
+  select(SessionID, MolePositionWorldX,MolePositionWorldY )%>%
+  filter(SessionID =="55aa012d4ac2315806e052fa911c9343")%>%
+  summarise(XMole = as.numeric(MolePositionWorldX),
+            YMole =as.numeric(MolePositionWorldY),
+            Size = 0,
+            id = paste(XMole, YMole, sep = ""))
+
+
+MoleData <- unique(MoleData)
+MoleData <- delete.na(MoleData)
+
 #### Changing the data and parsing the timestamp to get only the first number
 
 
@@ -687,7 +705,7 @@ GazeStatWithoutNa <- delete.na(GazeStat)
 
 GazeStatReduced <- GazeStatWithoutNa[!duplicated(GazeStatWithoutNa[,c('time')]),]
 
-GazeStatReduced <- GazeStatReduced[which(1:nrow(GazeStatReduced) %% 2 == 0) , ]
+GazeStatReduced <- GazeStatReduced[which(1:nrow(GazeStatReduced) %% 4 == 0) , ]
 
 
 
@@ -710,26 +728,66 @@ MoleActivated <- D%>%
 
 MoleActivated <- unique(MoleActivated)
 
+MoleActivated <- arrange(MoleActivated,time) 
+
+MoleActivated[is.na(MoleActivated)] <- 0
 
 
-GazeStatActiveMole <- bind_rows(MoleActivated, GazeStatReduced) %>%
-  mutate(opacity = 1)
-GazeStatActiveMole <- arrange(GazeStatActiveMole,time) 
-GazeStatActiveMole <- delete.na(GazeStatActiveMole, 4)
-
-GazeStatActiveMole[is.na(GazeStatActiveMole)] <- 0
-
-
-GazeStatActiveMole$opacity <- ifelse(GazeStatActiveMole$xIndex == 0, 0,1)
+MoleActivated$size <- ifelse(MoleActivated$xIndex == 0 , 0,32)
 
 
 
+GazeStatActiveMole <- bind_rows(GazeStatReduced, MoleActivated) 
 
-fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = GazeStatActiveMole, x=~x, y=~y, frame=~time)%>%
+GazeStatActiveMole <- arrange(GazeStatActiveMole,time)
+
+
+
+  
+GazeStatActiveMole <- GazeStatActiveMole %>%
+  filter(time >= 0.1) %>%
+  summarise(x = x,
+            y = y, 
+            time = time,
+            XMole= XMole,
+            YMole = YMole,
+            size = size)
+
+GazeStatActiveMole$size[is.na(GazeStatActiveMole$size)] <- 0
+
+
+GazeStatActiveMole <- GazeStatActiveMole %>%
+  group_by(time)%>%
+  group_modify(~add_row(xIndex = MoleData$xIndex, yIndex = MoleData$yIndex, XMole = MoleData$XMole, YMole =MoleData$YMole, .x))%>%
+  ungroup()
+
+
+GazeStatActiveMole$size[is.na(GazeStatActiveMole$size)] <- 0
+
+
+GazeStatActiveMole <- GazeStatActiveMole %>% fill(x, .direction = "downup") %>% fill(y, .direction = "downup")
+
+GazeStatActiveMole$XMole[is.na(GazeStatActiveMole$XMole)] <- 0
+GazeStatActiveMole$YMole[is.na(GazeStatActiveMole$YMole)] <- 0
+
+GazeStatActiveMole <- GazeStatActiveMole %>%
+  mutate(id = paste(XMole,YMole,sep = ""))
+
+GazeStatActiveMole$id[is.na(GazeStatActiveMole$id)] <- 0.00
+
+GazeStatActiveMole <- arrange(GazeStatActiveMole,time,size) 
+
+
+GazeStatActiveMole <- GazeStatActiveMole %>%
+  slice(900:1400)
+
+GazeStatActiveMole <- unique(GazeStatActiveMole)
+
+fig <- plot_ly() %>% 
   add_trace(name="Spawn Points", data=MoleWallXY,
             x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none')%>%
   add_trace(name="Active Mole", data=GazeStatActiveMole,
-            x=~XMole, y=~YMole, type='scatter',frame=~time, marker=list(size=32, color = 'rgb(255, 0 , 0)'),opacity = GazeStatActiveMole$opacity) 
+            x=~XMole, y=~YMole, type='scatter',mode='markers',frame=~time, marker=list(size=~size))
  
 fig
 
@@ -738,6 +796,178 @@ fig
 
 
 
+
+
+###### 
+# TEST FOR THE MOLE
+
+TESTGazeStat = fixationSessionRange %>%
+  mutate(time = as.character(difftime( Timestamp, GameStartTimestamp$Timestamp))) %>%
+  separate(col=time,sep="[.]",into=c("i1","i2"), remove=F) %>%
+  separate(col=i2,sep="",into=c("i3","i4","i5","i6"), remove=F) %>%
+  summarise(x= as.numeric(WorldGazeHitPositionX),
+            y= as.numeric(WorldGazeHitPositionY),
+            time = as.numeric(paste(i1,".",i4,sep = ""))
+  )
+
+TESTGazeStatWithoutNa <- delete.na(TESTGazeStat)
+
+
+TESTGazeStatReduced <- TESTGazeStatWithoutNa[!duplicated(TESTGazeStatWithoutNa[,c('time')]),]
+
+TESTGazeStatReduced <- TESTGazeStatReduced %>%
+  slice(16:40)
+
+
+TESTMOLE <- D%>%
+  select(contains("CurrentMoleToHitIndex"), Timestamp, SessionID, MolePositionWorldX,MolePositionWorldY )%>%
+  filter(SessionID =="55aa012d4ac2315806e052fa911c9343")%>%
+  mutate(time = as.character(difftime( Timestamp, GameStartTimestamp$Timestamp))) %>%
+  separate(col=time,sep="[.]",into=c("i1","i2"), remove=F) %>%
+  separate(col=i2,sep="",into=c("i3","i4","i5","i6"), remove=F) %>%
+  summarise(xIndex= as.numeric(CurrentMoleToHitIndexX),
+            yIndex= as.numeric(CurrentMoleToHitIndexY),
+            XMole=as.numeric( MolePositionWorldX),
+            YMole=as.numeric(MolePositionWorldY),
+            time = as.numeric(paste(i1,".",i4,sep = ""))
+  )%>%
+  filter(time >=0)
+
+
+TESTMOLE <- unique(TESTMOLE)
+
+TESTMOLE <- arrange(TESTMOLE,time) 
+
+TESTMOLE[is.na(TESTMOLE)] <- 0
+
+
+TESTMOLE$opacity <- ifelse(TESTMOLE$xIndex == 0, 0,32)
+
+
+TESTMOLE <- TESTMOLE %>%
+  mutate(id = row_number()) 
+
+TESTMOLE <- TESTMOLE %>%
+  slice(16:40)
+
+
+TESTGazeStatActiveMole <- bind_rows(TESTGazeStatReduced, TESTMOLE) 
+
+TESTGazeStatActiveMole <- arrange(TESTGazeStatActiveMole,time) 
+
+
+TESTGazeStatActiveMole$opacity[is.na(TESTGazeStatActiveMole$opacity)] <- 0
+
+
+TESTGazeStatActiveMole <- TESTGazeStatActiveMole %>%
+  mutate(id = paste(XMole,YMole,sep = ""))%>%
+  mutate(id = as.numeric(id),)
+  
+
+TESTDF <- TESTGazeStatActiveMole %>%
+  group_by(time)%>%
+  group_modify(~add_row(xIndex = MOLETEST$xIndex, yIndex = MOLETEST$yIndex, XMole = MOLETEST$XMole, YMole =MOLETEST$YMole, .x))
+  
+  
+TESTDF$opacity[is.na(TESTDF$opacity)] <- 0
+
+
+TESTDF <- TESTDF %>% fill(x) %>% fill(y)
+
+TESTDF$xIndex[is.na(TESTDF$xIndex)] <- 0
+TESTDF$yIndex[is.na(TESTDF$yIndex)] <- 0
+TESTDF$XMole[is.na(TESTDF$XMole)] <- 0
+TESTDF$YMole[is.na(TESTDF$YMole)] <- 0
+TESTDF$id[is.na(TESTDF$id)] <- 0.00
+
+TESTDF <- arrange(TESTDF,time,opacity) 
+
+TESTDF[7,2] <- -1.6922
+
+TESTDF[7,3] <- 3.4478
+
+TESTDF[8,2] <- 1.5479
+
+TESTDF[8,3] <- 3.2121
+
+TESTDF <- unique(TESTDF)
+
+fig <- plot_ly() %>% add_trace(name="Patient Gaze",data = TESTDF, x=~x, y=~y, frame=~time)%>%
+  add_trace(name="Spawn Points", data=MoleWallXY,
+            x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none')%>%
+  add_trace(name="Active Mole", data=TESTDF,
+            x=~XMole, y=~YMole, type='scatter',mode='markers',frame=~time, marker=list(size=~opacity))
+
+
+fig
+
+
+
+
+
+
+
+
+###test 
+MOLETEST <- data.frame(xIndex=as.numeric() , yIndex=as.numeric(), XMole=as.numeric(), YMole=as.numeric(),opacity=as.numeric(), time=as.numeric(), id=as.numeric()) 
+MOLETEST <- MOLETEST %>%  
+   add_row(xIndex = 6, yIndex = 5, XMole = 0, YMole =1.8500,opacity= 0, time =0, id= 1.85)
+###
+
+TEST <- D%>%
+  select(contains("CurrentMoleToHitIndex"), Timestamp, SessionID, MolePositionWorldX,MolePositionWorldY )%>%
+  filter(SessionID =="55aa012d4ac2315806e052fa911c9343")%>%
+  mutate(time = as.character(difftime( Timestamp, GameStartTimestamp$Timestamp))) %>%
+  separate(col=time,sep="[.]",into=c("i1","i2"), remove=F) %>%
+  separate(col=i2,sep="",into=c("i3","i4","i5","i6"), remove=F) %>%
+  summarise(xIndex= as.numeric(CurrentMoleToHitIndexX),
+            yIndex= as.numeric(CurrentMoleToHitIndexY),
+            XMole=as.numeric( MolePositionWorldX),
+            YMole=as.numeric(MolePositionWorldY),
+            time = as.numeric(paste(i1,".",i4,sep = ""))
+  )%>%
+  filter(time >=0)
+
+
+TEST <- unique(TEST)
+
+TEST <- arrange(TEST,time) 
+
+TEST[is.na(TEST)] <- 0
+
+
+TEST$opacity <- ifelse(TEST$xIndex == 0, 0,32)
+
+
+TEST <- TEST %>%
+  mutate(id = paste(XMole, YMole)) 
+
+TEST <- TEST %>%
+  slice(21:26)
+
+
+TEST <- TEST %>%
+  add_row(xIndex = 6, yIndex = 5, XMole = 0, YMole =1.8500,opacity= 0, time =2.0, id= "0 1.85")%>%
+  add_row(xIndex = 6, yIndex = 5, XMole = 0, YMole =1.8500,opacity= 0, time =2.1, id= "0 1.85")%>%
+  add_row(xIndex = 6, yIndex = 5, XMole = 0, YMole =1.8500,opacity= 0, time =2.2, id= "0 1.85")%>%
+  add_row(xIndex = 6, yIndex = 5, XMole = 0, YMole =1.8500,opacity= 0, time =2.3, id= "0 1.85")%>%
+  add_row(xIndex = 6, yIndex = 5, XMole = 0, YMole =1.8500,opacity= 0, time =2.4, id= "0 1.85")
+
+
+
+TEST <- unique(TEST)
+
+TEST <- arrange(TEST,time) 
+TEST[4,6] <- 0
+
+fig <- plot_ly() %>% 
+  add_trace(name="Spawn Points", data=MoleWallXY,
+            x=~X, y=~Y, type='scatter',mode='markers',symbol=I('o'),marker=list(size=32),hoverinfo='none') %>%
+  add_trace(name="Active Mole", data=TEST,
+            x=~XMole, y=~YMole, type='scatter',mode='markers',frame=~time, marker=list(size=~opacity, color= ~id))
+
+
+fig
 
 
 
@@ -807,6 +1037,12 @@ test <- MoleActivated %>%
   filter(time <= 5) %>%
   mutate(id = paste(XMole,YMole)) %>%
   mutate(id = as.factor(id))
+
+
+
+
+
+
 
 
 
